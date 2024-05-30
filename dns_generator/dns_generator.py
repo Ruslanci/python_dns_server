@@ -4,7 +4,7 @@ import os
 QUESTION_TYPES = {
     b"\x00\x01": "a"
 }
-ZONES = {}  # Holds hostname -> record data, cannot grow as server runs
+ZONES = {}
 
 
 def load_zones():
@@ -47,23 +47,23 @@ class DNSGen(object):
         self.AA = "1"
         self.TC = "0"
         self.RD = "0"
-        self.RA = "0"  # 0=No Recursion Available
+        self.RA = "0"
         self.Z = "000"
         self.RCODE = "0000"
-        self.QDCOUNT = b"\x00\01"  # Answer only 1 question for now
-        self.NSCOUNT = b"\x00\x00"  # Nameserver count
-        self.ARCOUNT = b"\x00\x00"  # Additional records
-        self.format_error = 0  # 1=Error in trying to parse domain parts
+        self.QDCOUNT = b"\x00\01"
+        self.NSCOUNT = b"\x00\x00"
+        self.ARCOUNT = b"\x00\x00"
+        self.format_error = 0
         self.domain = ""
 
     def _get_transaction_id(self):
-        return self.data[0:2]  # first 2 bytes have transaction ID
+        return self.data[0:2]
 
     def _get_opcode(self):
-        byte1 = self.data[2:3]  # get 1 byte after transaction id
+        byte1 = self.data[2:3]
         opcode = ""
-        for bit in range(1, 5):  # loop bits till end of OPCODE bit
-            opcode += str(ord(byte1) & (1 << bit))  # ord converts byte to unicode int
+        for bit in range(1, 5):
+            opcode += str(ord(byte1) & (1 << bit))
         return opcode
 
     def _generate_flags(self):
@@ -73,31 +73,31 @@ class DNSGen(object):
 
     def _get_question_domain_type(self, data):
         self.format_error = 0
-        state = 0  # 1 = parsing for text labels, 0 = update length of next text to parse
+        state = 0
         expected_length = 0
         domain_string = ""
         domain_parts = []
         question_type = None
-        x = 0  # count to see if we reach end of subtext to parse
-        y = 0  # count number of bytes
+        x = 0
+        y = 0
         try:
             for byte in data:
                 if state == 1:
-                    if byte != 0:  # domain name not ended so add chars
+                    if byte != 0:
                         domain_string += chr(byte)
                     x += 1
-                    if x == expected_length:  # got to end of this label
+                    if x == expected_length:
                         domain_parts.append(domain_string)
                         domain_string = ""
-                        state = 0  # ensure that next loop captures the byte length of the next label
-                    if byte == 0:  # Check if we have reached the end of the question domain
+                        state = 0
+                    if byte == 0:
                         domain_parts.append(domain_string)
                         break
                 else:
                     state = 1
                     expected_length = byte
                 y += 1
-            question_type = data[y:y + 2]  # after the domain the next 2 bytes are question type
+            question_type = data[y:y + 2]
             self.domain = ".".join(domain_parts)
         except IndexError:
             self.format_error = 1
@@ -115,7 +115,7 @@ class DNSGen(object):
             qt = "a"
         zone = get_zone(domain)
         if zone is None:
-            return [], qt, domain  # empty list ensure a domain we don't have returns correct data
+            return [], qt, domain
         return zone[qt], qt, domain
 
     @staticmethod
@@ -123,8 +123,8 @@ class DNSGen(object):
         resp = b"\xc0\x0c"
         if record_type == "a":
             resp += b"\x00\x01"
-        resp += b"\x00\x01"  # class IN
-        resp += int(record_ttl).to_bytes(4, byteorder="big")  # ttl in bytes
+        resp += b"\x00\x01"
+        resp += int(record_ttl).to_bytes(4, byteorder="big")
         if record_type == "a":
             resp += b"\x00\x04"  # IP length
             for part in record_value.split("."):
@@ -135,10 +135,10 @@ class DNSGen(object):
         transaction_id = self._get_transaction_id()
         ancount = records_length.to_bytes(2, byteorder="big")
         if self.format_error == 1:
-            self.RCODE = "0001"  # Format error
+            self.RCODE = "0001"
         elif ancount == b"\x00\x00":
-            self.RCODE = "0003"  # Name error
-        flags = self._generate_flags()  # relies on state variable self.RCODE, which modified above if appropriate
+            self.RCODE = "0003"
+        flags = self._generate_flags()
         return transaction_id + flags + self.QDCOUNT + ancount + self.NSCOUNT + self.ARCOUNT
 
     def _make_question(self, records_length, record_type, domain_name):
